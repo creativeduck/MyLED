@@ -1,6 +1,7 @@
 아두이노의 블루투스 모듈과 연동하여 무드등을 제어할 수 있는 앱입니다.
 ![보라 화면](https://user-images.githubusercontent.com/89892954/134772470-45d0d863-7fff-4678-a0d4-5bfc5b014b6c.jpg)
 
+
 아래는 시연 장면입니다.
 ![보라둘](https://user-images.githubusercontent.com/89892954/134772477-371f096a-6c96-4632-9227-2ec2d09d72bd.jpg)
 
