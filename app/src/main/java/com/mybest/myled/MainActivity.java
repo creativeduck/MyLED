@@ -23,6 +23,8 @@ import android.content.DialogInterface;
 import android.os.Handler;
 import android.os.Message;
 import android.os.SystemClock;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ArrayAdapter;
@@ -58,13 +60,11 @@ public class MainActivity extends AppCompatActivity {
     ImageButton btnColorPicker; // 컬러피커 버튼
     ImageButton btnConnect; // 블루투스 재접속 버튼
 
-    Button btnPut;
-
-    byte[] colors = new byte[5]; // 아두이노로 데이터를 보낼 배열
+    byte[] colors = new byte[5];
     boolean powerOn = false; // 전원이 켜졌는지 여부
 
-    static final int REQUEST_ENABLE_BT = 100; // 블루투스 요청 코드값 정의
-    static final int REQUEST_PERMISSIONS = 101; // 위험 권한 요청 코드값
+    static final int REQUEST_ENABLE_BT = 100;
+    static final int REQUEST_PERMISSIONS = 101;
     BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter(); // 블루투스 어댑터
     BluetoothDevice bluetoothDevice;    // 블루투스 장치
     Set<BluetoothDevice> pairedDevices; // 페어링된 장치 집합
@@ -76,7 +76,6 @@ public class MainActivity extends AppCompatActivity {
     InputStream inputStream;
 
     boolean paired=false;
-
     Thread receiveThread;
 
     private final BroadcastReceiver mReceiver = new BroadcastReceiver() { // 브로드캐스트 리시버
@@ -222,10 +221,8 @@ public class MainActivity extends AppCompatActivity {
             public void handleMessage(Message msg) {
                 if(msg.what==1) {
                     try{
-                        // 소켓으로 데이터 송수신을 위한 스트림 객체 얻는다.
                         outputStream = bluetoothSocket.getOutputStream();
                         inputStream = bluetoothSocket.getInputStream();
-                        // receiveDate();
                     } catch(IOException e) {
                         e.printStackTrace();
                     }
@@ -244,71 +241,24 @@ public class MainActivity extends AppCompatActivity {
         Thread thread = new Thread(new Runnable() {
             public void run() {
                 if(paired)
-                    bluetoothDevice = getPairedDevice(selectedDeviceName); // 페어링된 목록에서 선택한 이름의 블루투스 객체를 받는다.
+                    bluetoothDevice = getPairedDevice(selectedDeviceName);
                 else
                     bluetoothDevice = getUnpairedDevice(selectedDeviceName);
-                // 블루투스 장치와 통신하기 위해선 소켓 생성시 UUID가 필요하다.
-                // 중복되지 않는 고유 식별키를 생성해서 우리가 필요로 하는 uuid를 얻는다.
-                UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"); // 블루투스 통신에선 다음 값을 사용한다.
-                // UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb"); // 블루투스 통신에선 다음 값을 사용한다.
+                UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
 
                 try {
-                    // 블루투스 통신은 소켓을 생성해서 한다. 소켓을 얻기 위해선 createRfcommSocketToServiceRecord() 메소드를 사용한다.
-                    // 앞서 얻은 블루투스 객체로 이 메소드를 사용해 블루투스 모듈과 통신할 수 있는 소켓을 생성한다. 매개변수로 uuid를 넣어주어야 한다.
                     bluetoothSocket = bluetoothDevice.createRfcommSocketToServiceRecord(uuid);
-                    // RFCOMM 채널을 통한 연결, socket에 connect하는데 시간이 걸린다. 따라서 ui에 영향을 주지 않기 위해서는
-                    // Thread로 연결 과정을 수행해야 한다.
                     bluetoothSocket.connect();
                     mHandler.sendEmptyMessage(1);
                 } catch (IOException e) {
-                    // 블루투스 연결 중 오류 발생
                     e.printStackTrace();
                     mHandler.sendEmptyMessage(-1);
                 }
             }
         });
-        //연결 thread를 수행한다
         thread.start();
     }
 
-    private void receiveDate() {
-        final Handler handler = new Handler();
-
-        // 문자열 수신 쓰레드
-        receiveThread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                while (!Thread.currentThread().isInterrupted()) {
-                    try {
-                        int bytesAvailable = inputStream.available();
-                        if (bytesAvailable > 0) { //데이터가 수신된 경우
-                            byte[] readColor = new byte[4];
-                            SystemClock.sleep(50);
-                            inputStream.read(readColor);
-
-                            handler.post(new Runnable() {
-                                @Override
-                                public void run() {
-                                    currentState.setText("R: "+ (readColor[0] & 0xFF)
-                                            +" G: "+ (readColor[1] & 0xFF)
-                                            +" B: "+ (readColor[2] & 0xFF)
-                                            +" 밝기: "+(readColor[3] & 0xFF));
-                                }
-                            });
-                        }
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    } catch(Exception e) {
-                        e.printStackTrace();
-                    }
-                }
-            }
-        });
-        //데이터 수신 thread 시작
-        receiveThread.start();
-    }
-
-    // 액티비티가 종료되기 직전 호출되는 함수
     @Override
     protected void onDestroy() {
         try{
@@ -388,7 +338,7 @@ public class MainActivity extends AppCompatActivity {
         });
         // 컬러피커
         btnColorPicker.setOnClickListener(e-> {
-            colorPicker();
+            colorPicker2();
         });
         // 밝기 조절
         bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -426,15 +376,15 @@ public class MainActivity extends AppCompatActivity {
     }
     // color나 pixel을 파라미터로 전달받았을 때 동작
     private void sendData(int cOrp) {
-        colors[0] = (byte) Color.red(cOrp); // 빨간색 설정
-        colors[1] = (byte) Color.green(cOrp); // 초록색 설정
-        colors[2] = (byte) Color.blue(cOrp); // 파란색 설정
-        colors[3] = (byte) bar.getProgress(); // 밝기 설정
-        selectedColor.setImageDrawable(null); // 선택된 색상을 보여주는 이미지뷰에 설정되어있는 이미지 지우기
+        colors[0] = (byte) Color.red(cOrp);
+        colors[1] = (byte) Color.green(cOrp);
+        colors[2] = (byte) Color.blue(cOrp);
+        colors[3] = (byte) bar.getProgress();
+        selectedColor.setImageDrawable(null);
         selectedColor.setBackgroundColor(Color.rgb(Color.red(cOrp), Color.green(cOrp), 
-                                                    Color.blue(cOrp))); // 현재 선택된 색상으로 배경색 설정
+                                                    Color.blue(cOrp)));
         try {
-            outputStream.write(colors); // 출력 스트림으로 데이터 배열 전송
+            outputStream.write(colors);
         } catch(Exception e) {
             e.printStackTrace();
             Toast.makeText(getApplicationContext(), "데이터를 전송할 수 없습니다", Toast.LENGTH_SHORT).show();
@@ -443,71 +393,35 @@ public class MainActivity extends AppCompatActivity {
     }
     // 레인보우 함수
     private void rainbow() {
-        colors[4] = 1; // 레인보우 O
+        colors[4] = 1;
         sendData();
         currentState.setText("rainbow");
-        powerOn=true; // 전원 켜짐
+        powerOn=true;
         colors[4] = 0;
     }
     // 전원 함수
     private void power() {
-        if(powerOn) {   // 전원이 켜져있다면
-            bar.setProgress(0); // 시크바 값 0으로 설정
-            sendData();                              // 밝기 데이터 전송
-            powerOn=false;                          // 전원 꺼짐
+        if(powerOn) {
+            bar.setProgress(0);
+            sendData();
+            powerOn=false;
         }
         else { // 전원이 꺼져있다면
-            bar.setProgress(255); // 시크바 값 255로 설정
-            sendData();            // 밝기 데이터 전송
-            powerOn=true;         // 전원 켜짐
+            bar.setProgress(255);
+            sendData();
+            powerOn=true;
         }
     }
 
-    // 컬러피커 1
-    private void colorPicker() {
-        final ColorPicker colorPicker = new ColorPicker(this);  // ColorPicker 객체 생성
-        ArrayList<String> colors = new ArrayList<>();  // Color 넣어줄 list
-
-        colors.add("#e8472e");
-        colors.add("#ff8c8c");
-        colors.add("#f77f23");
-        colors.add("#e38436");
-        colors.add("#f0e090");
-        colors.add("#98b84d");
-        colors.add("#a3d17b");
-        colors.add("#6ecf69");
-        colors.add("#6ec48c");
-        colors.add("#5aa392");
-        colors.add("#4b8bbf");
-        colors.add("#6a88d4");
-        colors.add("#736dc9");
-        colors.add("#864fbd");
-        colors.add("#d169ca");
-        colorPicker.setColors(colors);
-
-        colorPicker.setColumns(5)  // 5열로 설정
-                .setRoundColorButton(true)  // 원형 버튼으로 설정
-                .setTitle("색상 선택")
-                .setOnChooseColorListener(new ColorPicker.OnChooseColorListener() {
-                    @Override
-                    public void onChooseColor(int position, int color) {
-                        sendData(color);
-                        powerOn=true;
-                    }
-                    @Override
-                    public void onCancel() {}
-                }).show();  // dialog 생성
-    }
-    // 컬러피커 2
     private void colorPicker2() {
         new ColorPickerPopup.Builder(this)
                 .initialColor(Color.WHITE)
                 .enableAlpha(false)
-                .enableBrightness(true) // 밝기와 투명도는 여기서 선택해도 의미가 없으르모 배제
+                .enableBrightness(true)
                 .okTitle("선택")
                 .cancelTitle("취소")
-                .showIndicator(true) // 어떤 색 가리키고 있는지 확인
-                .showValue(false) // 어떤 값 가리키는지 확인(but 필요없음)
+                .showIndicator(true)
+                .showValue(false)
                 .build()
                 .show(new ColorPickerPopup.ColorPickerObserver() {
                     @Override
@@ -553,6 +467,24 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
             super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        }
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.app_bar_menu, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        switch (item.getItemId()) {
+            case R.id.setting:
+                Intent intent = new Intent(this, LicenseActivity.class);
+                startActivity(intent);
+                return true;
+            default:
+                return super.onOptionsItemSelected(item);
         }
     }
 }
