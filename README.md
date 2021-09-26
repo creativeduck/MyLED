@@ -7,3 +7,20 @@
    
 시연 장면에 나온 무드등 또한 제가 직접 만들었으며, 제작 방법은 아래 블로그에 나와있습니다.   
 https://kmight0518.tistory.com/3   
+   
+   
+## License
+
+    Copyright 2018 Hong Duan
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
