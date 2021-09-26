@@ -11,11 +11,10 @@ https://kmight0518.tistory.com/3
    
    
 ## License
-   
-
-
     [ColorPicker]
     Copyright 2018 Hong Duan
+    https://github.com/duanhong169/ColorPicker
+    Apache-2.0 License
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
