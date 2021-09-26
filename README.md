@@ -15,7 +15,7 @@ MyLED is licensed under the Apache License, Version 2.0. See [LICENSE](https://g
 
     [ColorPicker]
     Copyright 2018 Hong Duan
-    https://github.com/duanhong169/ColorPicker
+    (https://github.com/duanhong169/ColorPicker)
     Apache-2.0 License
 
     Licensed under the Apache License, Version 2.0 (the "License");
