@@ -21,13 +21,14 @@
         android:id="@+id/colorPick"
         android:layout_width="match_parent"
         android:layout_height="400dp"
+        android:contentDescription="@string/description"
         android:src="@drawable/colorroll"
         app:layout_constraintBottom_toTopOf="@id/guideline1"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.81"
-        android:contentDescription="@string/description"/>
+        app:layout_constraintVertical_bias="0.588" />
 
     <com.google.android.material.imageview.ShapeableImageView
         android:id="@+id/selectedColor"
@@ -52,12 +53,15 @@
         android:id="@+id/currentState"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="R: 250 G: 250 B: 250\n Brightness: 255"
         android:textColor="#FF000000"
         android:textSize="23sp"
         app:layout_constraintBottom_toBottomOf="@id/guideline1"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="@id/guideline1" />
+        app:layout_constraintTop_toTopOf="@id/guideline1"
+        android:layout_marginBottom="10dp"/>
 
     <SeekBar
         android:id="@+id/bar"

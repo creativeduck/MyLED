@@ -7,7 +7,9 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothSocket;
+import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -16,6 +18,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Bundle;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -23,6 +26,7 @@ import android.content.DialogInterface;
 import android.os.Handler;
 import android.os.Message;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
@@ -63,6 +67,8 @@ public class MainActivity extends AppCompatActivity {
     byte[] colors = new byte[5];
     boolean powerOn = false; // 전원이 켜졌는지 여부
 
+    String[] permissions = {Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION};
+
     static final int REQUEST_ENABLE_BT = 100;
     static final int REQUEST_PERMISSIONS = 101;
     BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter(); // 블루투스 어댑터
@@ -75,8 +81,10 @@ public class MainActivity extends AppCompatActivity {
     OutputStream outputStream;
     InputStream inputStream;
 
+    boolean canConnectFlag = false;
+    int canConnectNum = 0;
     boolean paired=false;
-    Thread receiveThread;
+//    Thread receiveThread;
 
     private final BroadcastReceiver mReceiver = new BroadcastReceiver() { // 브로드캐스트 리시버
         @Override
@@ -92,195 +100,12 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     };
-    private void add(BluetoothDevice device) {
-        if(!(pairedDevices.contains(device))) { // 페어링된 장치에 없고
-            if(unpairedDevices.add(device)) { // 장치가 추가된다면(중복이 아니라면)
-                unpairedList.add(device.getName());    // 페어링되지 않은 장치이름 목록에 이름 추가
-            }
-        }
-        adapter.notifyDataSetChanged(); // 변화 반영
-        Toast.makeText(this, device.getName()+" 검색", Toast.LENGTH_SHORT).show();
-    }
-
-    // 장치가 블루투스 지원하는지 확인
-    private void checkBluetooth() {
-        if(bluetoothAdapter==null) {
-            Toast.makeText(getApplicationContext(), "해당 기기는 블루투스를 지원하지 않습니다.",
-                                                        Toast.LENGTH_SHORT).show();
-            finish();
-        } else {
-            if(bluetoothAdapter.isEnabled()) {
-                selectPairedDevice();
-            } else {
-                Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-                startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
-            }
-        }
-    }
-    // 블루투스 활성화 여부에 따른 결과
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if(requestCode==REQUEST_ENABLE_BT) {
-            if(resultCode==RESULT_OK) {
-                selectPairedDevice();
-            } else if(resultCode==RESULT_CANCELED) {
-                finish();
-            }
-        }
-        super.onActivityResult(requestCode, resultCode, data);
-    }
-    // 기기검색
-    // 이미 페어링된 블루투스 기기 검색
-    private void selectPairedDevice() {
-        pairedDevices = bluetoothAdapter.getBondedDevices();
-
-        AlertDialog.Builder builder = new AlertDialog.Builder(this); // 다이얼로그 생성
-        builder.setTitle("기기 선택");
-
-        List<String> pairedList = new ArrayList<>(); // 페어링된 기기이름 목록
-        for(BluetoothDevice device : pairedDevices) { // 페어링된 기기 집합에서
-            pairedList.add(device.getName());        // 장치 이름 전부 기기목록에 추가
-        }
-        pairedList.add("취소"); // 취소버튼 추가
-
-        final CharSequence[] devices = pairedList.toArray(new CharSequence[pairedList.size()]);
-        builder.setItems(devices, new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                if (which == pairedList.size()-1) { // 맨 마지막 버튼이 취소 버튼
-                    selectUnpairedDevice(); // 페어링되지 않은 기기 검색
-                } else {
-                    bluetoothAdapter.cancelDiscovery();
-                    paired = true;
-                    connectDevice(devices[which].toString(), paired); // 선택된 인덱스에 해당하는 기기 연결
-                }
-            }
-        });
-        builder.setCancelable(false);    // 배경을 선택하면 무력화되는 것을 막기 위함
-        AlertDialog dialog = builder.create(); // 빌더로 다이얼로그 만들기
-        dialog.show();   // 다이얼로그 시작
-    }
-
-    // 페어링되지 않은 기기 검색
-    private void selectUnpairedDevice() {
-        // 이미 검색 중이라면 검색을 종료하고, 다시 검색 시작
-        if(bluetoothAdapter.isDiscovering()) {
-            bluetoothAdapter.cancelDiscovery();
-        }
-        bluetoothAdapter.startDiscovery();
-
-        AlertDialog.Builder builder = new AlertDialog.Builder(this); // 다이얼로그 생성
-        builder.setTitle("기기 검색");
-
-        adapter = new ArrayAdapter<>(this,
-                android.R.layout.simple_list_item_1, unpairedList);
-
-        builder.setAdapter(adapter, new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                bluetoothAdapter.cancelDiscovery();
-                String name = adapter.getItem(which);
-                unpairedList.remove(name);
-                paired = false;
-                connectDevice(name, paired);
-            }
-        });
-        AlertDialog dialog = builder.create(); // 빌더로 다이얼로그 만들기
-        dialog.show();
-    }
-
-    // 기기 연결 준비
-    // 블루투스 페어링된 목록에서 디바이스 장치 가져오기
-    private BluetoothDevice getPairedDevice(String name) {
-        BluetoothDevice selectedDevice = null;
-
-        for(BluetoothDevice device : pairedDevices) {
-            if(name.equals(device.getName())) {
-                selectedDevice = device;
-                break;
-            }
-        }
-        return selectedDevice;
-    }
-    // 페어링되지 않은 장치 목록에서 디바이스 장치 가져오기
-    private BluetoothDevice getUnpairedDevice(String name) {
-        BluetoothDevice selectedDevice = null;
-
-        for(BluetoothDevice device : unpairedDevices) {
-            if(name.equals(device.getName())) {
-                selectedDevice = device;
-                break;
-            }
-        }
-        return selectedDevice;
-    }
-
-    // 기기 연결
-    private void connectDevice(String selectedDeviceName, boolean paired) {
-        final Handler mHandler = new Handler() {
-            public void handleMessage(Message msg) {
-                if(msg.what==1) {
-                    try{
-                        outputStream = bluetoothSocket.getOutputStream();
-                        inputStream = bluetoothSocket.getInputStream();
-                    } catch(IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-                else {
-                    Toast.makeText(getApplicationContext(), "연결 오류", Toast.LENGTH_SHORT).show();
-                    try {
-                        bluetoothSocket.close();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-            }
-        };
-
-        Thread thread = new Thread(new Runnable() {
-            public void run() {
-                if(paired)
-                    bluetoothDevice = getPairedDevice(selectedDeviceName);
-                else
-                    bluetoothDevice = getUnpairedDevice(selectedDeviceName);
-                UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
-
-                try {
-                    bluetoothSocket = bluetoothDevice.createRfcommSocketToServiceRecord(uuid);
-                    bluetoothSocket.connect();
-                    mHandler.sendEmptyMessage(1);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                    mHandler.sendEmptyMessage(-1);
-                }
-            }
-        });
-        thread.start();
-    }
-
-    @Override
-    protected void onDestroy() {
-        try{
-            inputStream.close(); // 입력 스트림 닫아주기
-            outputStream.close(); // 출력 스트림 닫아주기
-            bluetoothSocket.close(); // 소켓 닫아주기
-            receiveThread.interrupt();
-
-
-        } catch(IOException e) {
-            e.printStackTrace();
-        }
-        unregisterReceiver(mReceiver);
-        super.onDestroy();
-    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        String[] permissions = {Manifest.permission.ACCESS_FINE_LOCATION};
         checkPermissions(permissions);
 
         IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_FOUND);
@@ -295,9 +120,11 @@ public class MainActivity extends AppCompatActivity {
         btnConnect = findViewById(R.id.btnReconnect);
         btnColorPicker = findViewById(R.id.btnColorPicker);
 
+        currentState.setVisibility(View.INVISIBLE);
 
         // 색상 선택하면 색상 데이터 전송해서 LED 불빛 제어
        colorPick.setOnTouchListener(new View.OnTouchListener() { // 터치 리스너 상속
+            @SuppressLint("ClickableViewAccessibility")
             public boolean onTouch(View v, MotionEvent event) { // 색상이 터치되면
                 // 터치된 곳의 좌표 가져오기
                 final int evX = (int) event.getX();
@@ -353,6 +180,229 @@ public class MainActivity extends AppCompatActivity {
             public void onStopTrackingTouch(SeekBar seekBar) {}
         });
     }
+    @Override
+    protected void onDestroy() {
+        try{
+            if (inputStream != null)
+                inputStream.close(); // 입력 스트림 닫아주기
+            if (outputStream != null)
+                outputStream.close(); // 출력 스트림 닫아주기
+            if (bluetoothSocket != null)
+                bluetoothSocket.close(); // 소켓 닫아주기
+//            receiveThread.interrupt();
+
+
+        } catch(IOException e) {
+            e.printStackTrace();
+        }
+        unregisterReceiver(mReceiver);
+        super.onDestroy();
+    }
+
+    private void add(BluetoothDevice device) {
+        if(!(pairedDevices.contains(device))) { // 페어링된 장치에 없고
+            if(unpairedDevices.add(device)) { // 장치가 추가된다면(중복이 아니라면)
+                unpairedList.add(device.getName());    // 페어링되지 않은 장치이름 목록에 이름 추가
+            }
+        }
+        adapter.notifyDataSetChanged(); // 변화 반영
+        Toast.makeText(this, device.getName()+" " + getString(R.string.search), Toast.LENGTH_SHORT).show();
+    }
+
+    // 장치가 블루투스 지원하는지 확인
+    private void checkBluetooth() {
+        int num = 0;
+        for (int i = 0; i < permissions.length; i++) {
+            int permissionCheck = ContextCompat.checkSelfPermission(this, permissions[i]);
+            if(permissionCheck == PackageManager.PERMISSION_GRANTED){
+                num += 1;
+            }
+        }
+        if (num == permissions.length) {
+            if(bluetoothAdapter==null) {
+                Toast.makeText(getApplicationContext(), getString(R.string.not_support_device),
+                        Toast.LENGTH_SHORT).show();
+                finish();
+            } else {
+                if(bluetoothAdapter.isEnabled()) {
+                    selectPairedDevice();
+                } else {
+                    Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+                    startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+                }
+            }
+        } else {
+            AlertDialog.Builder localBuilder = new AlertDialog.Builder(this);
+            localBuilder.setTitle(getString(R.string.set_permissions))
+                    .setMessage(getString(R.string.restricted))
+                    .setPositiveButton(getString(R.string.goto_set_permissions), new DialogInterface.OnClickListener(){
+                        public void onClick(DialogInterface dialogInterface, int paramAnonymousInt){
+                            try {
+                                Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                                        .setData(Uri.parse("package:" + getPackageName()));
+                                startActivity(intent);
+                            } catch (ActivityNotFoundException e) {
+                                e.printStackTrace();
+                                Intent intent = new Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS);
+                                startActivity(intent);
+                            } catch (Exception ex) {
+                                ex.printStackTrace();
+                            }
+                        }})
+                    .setNegativeButton(getString(R.string.cancel), new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialogInterface, int paramAnonymousInt) {
+                            Toast.makeText(getApplication(),getString(R.string.cancel),Toast.LENGTH_SHORT).show();
+                        }});
+            localBuilder.show();
+        }
+    }
+    // 블루투스 활성화 여부에 따른 결과
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if(requestCode==REQUEST_ENABLE_BT) {
+            if(resultCode==RESULT_OK) {
+                selectPairedDevice();
+            } else if(resultCode==RESULT_CANCELED) {
+                finish();
+            }
+        }
+        super.onActivityResult(requestCode, resultCode, data);
+    }
+    // 기기검색
+    // 이미 페어링된 블루투스 기기 검색
+    private void selectPairedDevice() {
+        pairedDevices = bluetoothAdapter.getBondedDevices();
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this); // 다이얼로그 생성
+//        builder.setTitle("기기 선택");
+        builder.setTitle(R.string.select_device);
+
+        List<String> pairedList = new ArrayList<>(); // 페어링된 기기이름 목록
+        for(BluetoothDevice device : pairedDevices) { // 페어링된 기기 집합에서
+            pairedList.add(device.getName());        // 장치 이름 전부 기기목록에 추가
+        }
+//        pairedList.add("취소"); // 취소버튼 추가
+        pairedList.add(getString(R.string.cancel)); // 취소버튼 추가
+
+        final CharSequence[] devices = pairedList.toArray(new CharSequence[pairedList.size()]);
+        builder.setItems(devices, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                if (which == pairedList.size()-1) { // 맨 마지막 버튼이 취소 버튼
+                    selectUnpairedDevice(); // 페어링되지 않은 기기 검색
+                } else {
+                    bluetoothAdapter.cancelDiscovery();
+                    paired = true;
+                    connectDevice(devices[which].toString(), paired); // 선택된 인덱스에 해당하는 기기 연결
+                }
+            }
+        });
+        builder.setCancelable(false);    // 배경을 선택하면 무력화되는 것을 막기 위함
+        AlertDialog dialog = builder.create(); // 빌더로 다이얼로그 만들기
+        dialog.show();   // 다이얼로그 시작
+    }
+
+    // 페어링되지 않은 기기 검색
+    private void selectUnpairedDevice() {
+        // 이미 검색 중이라면 검색을 종료하고, 다시 검색 시작
+        if(bluetoothAdapter.isDiscovering()) {
+            bluetoothAdapter.cancelDiscovery();
+        }
+        bluetoothAdapter.startDiscovery();
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this); // 다이얼로그 생성
+//        builder.setTitle("기기 검색");
+        builder.setTitle(getString(R.string.search_device));
+
+        adapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_list_item_1, unpairedList);
+
+        builder.setAdapter(adapter, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                bluetoothAdapter.cancelDiscovery();
+                String name = adapter.getItem(which);
+                unpairedList.remove(name);
+                paired = false;
+                connectDevice(name, paired);
+            }
+        });
+        AlertDialog dialog = builder.create(); // 빌더로 다이얼로그 만들기
+        dialog.show();
+    }
+
+    // 기기 연결 준비
+    // 블루투스 페어링된 목록에서 디바이스 장치 가져오기
+    private BluetoothDevice getPairedDevice(String name) {
+        BluetoothDevice selectedDevice = null;
+
+        for(BluetoothDevice device : pairedDevices) {
+            if(name.equals(device.getName())) {
+                selectedDevice = device;
+                break;
+            }
+        }
+        return selectedDevice;
+    }
+    // 페어링되지 않은 장치 목록에서 디바이스 장치 가져오기
+    private BluetoothDevice getUnpairedDevice(String name) {
+        BluetoothDevice selectedDevice = null;
+
+        for(BluetoothDevice device : unpairedDevices) {
+            if(name.equals(device.getName())) {
+                selectedDevice = device;
+                break;
+            }
+        }
+        return selectedDevice;
+    }
+
+    // 기기 연결
+    private void connectDevice(String selectedDeviceName, boolean paired) {
+        final Handler mHandler = new Handler() {
+            @SuppressLint("HandlerLeak")
+            public void handleMessage(Message msg) {
+                if(msg.what==1) {
+                    try{
+                        outputStream = bluetoothSocket.getOutputStream();
+                        inputStream = bluetoothSocket.getInputStream();
+                    } catch(IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+                else {
+                    Toast.makeText(getApplicationContext(), getString(R.string.connection_error), Toast.LENGTH_SHORT).show();
+                    try {
+                        bluetoothSocket.close();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        };
+
+        Thread thread = new Thread(new Runnable() {
+            public void run() {
+                if(paired)
+                    bluetoothDevice = getPairedDevice(selectedDeviceName);
+                else
+                    bluetoothDevice = getUnpairedDevice(selectedDeviceName);
+                UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+
+                try {
+                    bluetoothSocket = bluetoothDevice.createRfcommSocketToServiceRecord(uuid);
+                    bluetoothSocket.connect();
+                    mHandler.sendEmptyMessage(1);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    mHandler.sendEmptyMessage(-1);
+                }
+            }
+        });
+        thread.start();
+    }
+
+
     // 뷰로부터 비트맵 객체 만들기
     public Bitmap getBitmapFromView(View view) {
         Bitmap bitmap = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888);
@@ -361,8 +411,10 @@ public class MainActivity extends AppCompatActivity {
         return bitmap;
     }
     private void setCurrentState() {
+        currentState.setVisibility(View.VISIBLE);
         currentState.setText("R: " + (colors[0] & 0xFF) + " G: " + (colors[1] & 0xFF) +
-                             " B: " + (colors[2] & 0xFF) + " 밝기: "+ (colors[3] & 0xFF));
+                             " B: " + (colors[2] & 0xFF) + "\n" + getString(R.string.brightness) +
+                            ": "+ (colors[3] & 0xFF));
     }
     // 색상 및 밝기 데이터 블루투스로 보내기
     private void sendData() {
@@ -370,7 +422,7 @@ public class MainActivity extends AppCompatActivity {
             outputStream.write(colors); // 출력 스트림으로 데이터 배열 전송
         } catch(Exception e) {
             e.printStackTrace();
-            Toast.makeText(getApplicationContext(), "데이터를 전송할 수 없습니다", Toast.LENGTH_SHORT).show();
+            Toast.makeText(getApplicationContext(), getString(R.string.cannot_send_data), Toast.LENGTH_SHORT).show();
         }
         setCurrentState();
     }
@@ -387,7 +439,7 @@ public class MainActivity extends AppCompatActivity {
             outputStream.write(colors);
         } catch(Exception e) {
             e.printStackTrace();
-            Toast.makeText(getApplicationContext(), "데이터를 전송할 수 없습니다", Toast.LENGTH_SHORT).show();
+            Toast.makeText(getApplicationContext(), getString(R.string.cannot_send_data), Toast.LENGTH_SHORT).show();
         }
         setCurrentState();
     }
@@ -418,8 +470,8 @@ public class MainActivity extends AppCompatActivity {
                 .initialColor(Color.WHITE)
                 .enableAlpha(false)
                 .enableBrightness(true)
-                .okTitle("선택")
-                .cancelTitle("취소")
+                .okTitle(getString(R.string.select))
+                .cancelTitle(getString(R.string.cancel))
                 .showIndicator(true)
                 .showValue(false)
                 .build()
@@ -438,10 +490,10 @@ public class MainActivity extends AppCompatActivity {
             String curPermission = permissions[i];
             int permissionCheck = ContextCompat.checkSelfPermission(this, curPermission);
             if(permissionCheck == PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(getApplicationContext(), curPermission+" 권한 있음", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getApplicationContext(), curPermission+ " "+getString(R.string.has_permission), Toast.LENGTH_SHORT).show();
             } else {
                 if(ActivityCompat.shouldShowRequestPermissionRationale(this,curPermission)) {
-                    Toast.makeText(getApplicationContext(), curPermission+" 권한 설명 필요", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getApplicationContext(), curPermission+" " + getString(R.string.need_explain_permission), Toast.LENGTH_SHORT).show();
                 } else {
                     requestList.add(curPermission);
                 }
@@ -460,9 +512,9 @@ public class MainActivity extends AppCompatActivity {
             if (grantResults.length > 0) {
                 for (int i = 0; i < grantResults.length; i++) {
                     if (grantResults[i] == PackageManager.PERMISSION_GRANTED) {
-                        Toast.makeText(this, (i+1)+"번째 권한 승인", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, (i+1)+getString(R.string.index_permission_approved), Toast.LENGTH_SHORT).show();
                     } else {
-                        Toast.makeText(this, (i+1)+"번째 권한 거부", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, (i+1)+getString(R.string.index_permission_denied), Toast.LENGTH_SHORT).show();
                     }
                 }
             }

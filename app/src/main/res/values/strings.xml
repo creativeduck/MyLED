@@ -1,7 +1,7 @@
 <resources>
-    <string name="app_name">MyLED</string>
-    <string name="description">description</string>
-    <string name="tmp">Apache License Version 2.0, January 2004\n
+    <string name="app_name" translatable="false">MyLED</string>
+    <string name="description" translatable="false">description</string>
+    <string name="tmp" translatable="false">Apache License Version 2.0, January 2004\n
                         http://www.apache.org/licenses/\n
 \n
    TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n
@@ -203,4 +203,20 @@
    limitations under the License.\n
 \n
     </string>
+    <string name="not_support_device">This device does not support Bluetooth</string>
+    <string name="select">Choose</string>
+    <string name="need_explain_permission">This permission is required to discover unpaired devices</string>
+    <string name="search">is Discovered</string>
+    <string name="select_device">Choose your device</string>
+    <string name="cancel">Cancel</string>
+    <string name="search_device">Device Discovery</string>
+    <string name="connection_error">Connection Error</string>
+    <string name="brightness">Brightness</string>
+    <string name="cannot_send_data">Unable to transfer data</string>
+    <string name="has_permission">PERMISSION_GRANTED</string>
+    <string name="index_permission_approved">th Permission Granted</string>
+    <string name="index_permission_denied">th Permission Denied</string>
+    <string name="set_permissions">Set Permissions</string>
+    <string name="restricted">Some features are restricted due to permission denial</string>
+    <string name="goto_set_permissions">Setting Permissions</string>
 </resources>
