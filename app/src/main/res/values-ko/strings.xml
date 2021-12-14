@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MyLED</string>
+    <string name="not_support_device">해당 기기는 블루투스를 지원하지 않습니다</string>
+    <string name="select">선택</string>
+    <string name="need_explain_permission">이 권한은 페어링되지 않은 기기를 탐색하는 데 필요합니다</string>
+    <string name="search">검색</string>
+    <string name="select_device">기기 선택</string>
+    <string name="cancel">취소</string>
+    <string name="search_device">기기 검색</string>
+    <string name="connection_error">연결 오류</string>
+    <string name="brightness">밝기</string>
+    <string name="cannot_send_data">데이터를 전송할 수 없습니다</string>
+    <string name="has_permission">권한 있음</string>
+    <string name="index_permission_approved">번째 권한 승인</string>
+    <string name="index_permission_denied">번째 권한 거부</string>
+    <string name="set_permissions">권한 설정</string>
+    <string name="restricted">권한 거절로 인해 일부 기능이 제한됩니다</string>
+    <string name="goto_set_permissions">권한 설정하기</string>
+</resources>

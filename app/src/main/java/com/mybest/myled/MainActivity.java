@@ -24,6 +24,7 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.DialogInterface;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Message;
 import android.os.SystemClock;
 import android.provider.Settings;
@@ -40,6 +41,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.material.imageview.ShapeableImageView;
+import com.mybest.myled.databinding.ActivityMainBinding;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -55,36 +57,26 @@ import top.defaults.colorpicker.ColorPickerPopup;
 
 
 public class MainActivity extends AppCompatActivity {
-    ImageView colorPick; // 색상 선택하는 이미지
-    ShapeableImageView selectedColor; // 선택된 색상 보여주는 이미지
-    TextView currentState; // 현재 색상과 밝기 표시할 텍스트뷰
-    SeekBar bar; // 밝기 조절할 시크바
-    ImageButton btnRainbow; // 레인보우 버튼
-    ImageButton btnPower; // 전원 버튼
-    ImageButton btnColorPicker; // 컬러피커 버튼
-    ImageButton btnConnect; // 블루투스 재접속 버튼
-
-    byte[] colors = new byte[5];
-    boolean powerOn = false; // 전원이 켜졌는지 여부
-
-    String[] permissions = {Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION};
+    private ActivityMainBinding binding;
 
     static final int REQUEST_ENABLE_BT = 100;
     static final int REQUEST_PERMISSIONS = 101;
+
+    String[] permissions = {Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION};
+
     BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter(); // 블루투스 어댑터
     BluetoothDevice bluetoothDevice;    // 블루투스 장치
     Set<BluetoothDevice> pairedDevices; // 페어링된 장치 집합
     Set<BluetoothDevice> unpairedDevices = new HashSet<>(); // 페어링되지 않은 장치 집합
     ArrayAdapter<String> adapter; // 기기 검색에 필요한 어댑터
     List<String> unpairedList = new ArrayList<>(); // 페어링되지 않은 장치이름 목록
-    BluetoothSocket bluetoothSocket;
-    OutputStream outputStream;
+    BluetoothSocket bluetoothSocket; // 블루투스 소켓
+    OutputStream outputStream; 
     InputStream inputStream;
 
-    boolean canConnectFlag = false;
-    int canConnectNum = 0;
+    boolean powerOn = false; // 전원이 켜졌는지 여부
     boolean paired=false;
-//    Thread receiveThread;
+    byte[] colors = new byte[5]; // 블루투스 기기로 보낼 byte 배열 데이터
 
     private final BroadcastReceiver mReceiver = new BroadcastReceiver() { // 브로드캐스트 리시버
         @Override
@@ -104,33 +96,23 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-
-        checkPermissions(permissions);
+        binding = ActivityMainBinding.inflate(getLayoutInflater());
+        setContentView(binding.getRoot());
+        binding.currentState.setVisibility(View.INVISIBLE);
 
         IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_FOUND);
         this.registerReceiver(mReceiver, filter);
 
-        btnPower = findViewById(R.id.btnPower);
-        selectedColor =  findViewById(R.id.selectedColor);
-        colorPick = findViewById(R.id.colorPick);
-        btnRainbow = findViewById(R.id.btnRainbow);
-        currentState = findViewById(R.id.currentState);
-        bar = findViewById(R.id.bar);
-        btnConnect = findViewById(R.id.btnReconnect);
-        btnColorPicker = findViewById(R.id.btnColorPicker);
-
-        currentState.setVisibility(View.INVISIBLE);
 
         // 색상 선택하면 색상 데이터 전송해서 LED 불빛 제어
-       colorPick.setOnTouchListener(new View.OnTouchListener() { // 터치 리스너 상속
+        binding.colorPick.setOnTouchListener(new View.OnTouchListener() {
             @SuppressLint("ClickableViewAccessibility")
             public boolean onTouch(View v, MotionEvent event) { // 색상이 터치되면
                 // 터치된 곳의 좌표 가져오기
                 final int evX = (int) event.getX();
                 final int evY = (int) event.getY();
 
-                Bitmap mBitmap = getBitmapFromView(colorPick);
+                Bitmap mBitmap = getBitmapFromView(binding.colorPick);
 
                 try {
                     int pixel = mBitmap.getPixel(evX, evY); // 비트맵 객체로부터 터치된 곳의 픽셀 가져오기
@@ -151,24 +133,24 @@ public class MainActivity extends AppCompatActivity {
         colors[1] = (byte) 255;
         colors[2] = (byte) 255;
         // 전원 버튼
-        btnPower.setOnClickListener(e-> {
+        binding.btnPower.setOnClickListener(e -> {
             power();
         });
         // 블루투스 접속 버튼
-        btnConnect.setOnClickListener(e-> {
-            checkBluetooth();
+        binding.btnReconnect.setOnClickListener(e -> {
+            checkPermissions(permissions);
         });
         // 레인보우 버튼
-        btnRainbow.setOnClickListener(e-> {
+        binding.btnRainbow.setOnClickListener(e -> {
             rainbow();
-            selectedColor.setImageResource(R.drawable.rainbow); // 선택된 색상 표시 이미지에 레인보우 이미지 나타내기
+            binding.selectedColor.setImageResource(R.drawable.rainbow); // 선택된 색상 표시 이미지에 레인보우 이미지 나타내기
         });
         // 컬러피커
-        btnColorPicker.setOnClickListener(e-> {
+        binding.btnColorPicker.setOnClickListener(e -> {
             colorPicker2();
         });
         // 밝기 조절
-        bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+        binding.bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 colors[3] = (byte) seekBar.getProgress(); // 현재 시크바 값을 밝기 데이터로 설정하기
@@ -182,6 +164,7 @@ public class MainActivity extends AppCompatActivity {
     }
     @Override
     protected void onDestroy() {
+        super.onDestroy();
         try{
             if (inputStream != null)
                 inputStream.close(); // 입력 스트림 닫아주기
@@ -189,14 +172,10 @@ public class MainActivity extends AppCompatActivity {
                 outputStream.close(); // 출력 스트림 닫아주기
             if (bluetoothSocket != null)
                 bluetoothSocket.close(); // 소켓 닫아주기
-//            receiveThread.interrupt();
-
-
         } catch(IOException e) {
             e.printStackTrace();
         }
         unregisterReceiver(mReceiver);
-        super.onDestroy();
     }
 
     private void add(BluetoothDevice device) {
@@ -218,20 +197,27 @@ public class MainActivity extends AppCompatActivity {
                 num += 1;
             }
         }
+        // 모든 권한이 있다면 실행
         if (num == permissions.length) {
+            // 블루투스를 지원하지 않는 장치라면 종료하기
             if(bluetoothAdapter==null) {
                 Toast.makeText(getApplicationContext(), getString(R.string.not_support_device),
                         Toast.LENGTH_SHORT).show();
                 finish();
             } else {
+                // 블루투스 활성화 되어있다면, 다음 동작 수행
                 if(bluetoothAdapter.isEnabled()) {
                     selectPairedDevice();
-                } else {
+                } 
+                // 블루투스 활성화 안 되어있다면, 인텐트 작업 통해 활성화하는 창 띄움
+                else {
                     Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
                     startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
                 }
             }
-        } else {
+        } 
+        // 권한이 하나라도 없다면 권한 설정하는 창으로 이동하도록 설정
+        else {
             AlertDialog.Builder localBuilder = new AlertDialog.Builder(this);
             localBuilder.setTitle(getString(R.string.set_permissions))
                     .setMessage(getString(R.string.restricted))
@@ -274,14 +260,12 @@ public class MainActivity extends AppCompatActivity {
         pairedDevices = bluetoothAdapter.getBondedDevices();
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this); // 다이얼로그 생성
-//        builder.setTitle("기기 선택");
         builder.setTitle(R.string.select_device);
 
         List<String> pairedList = new ArrayList<>(); // 페어링된 기기이름 목록
         for(BluetoothDevice device : pairedDevices) { // 페어링된 기기 집합에서
             pairedList.add(device.getName());        // 장치 이름 전부 기기목록에 추가
         }
-//        pairedList.add("취소"); // 취소버튼 추가
         pairedList.add(getString(R.string.cancel)); // 취소버튼 추가
 
         final CharSequence[] devices = pairedList.toArray(new CharSequence[pairedList.size()]);
@@ -293,7 +277,7 @@ public class MainActivity extends AppCompatActivity {
                 } else {
                     bluetoothAdapter.cancelDiscovery();
                     paired = true;
-                    connectDevice(devices[which].toString(), paired); // 선택된 인덱스에 해당하는 기기 연결
+                    connectDevice(devices[which].toString(), true); // 선택된 인덱스에 해당하는 기기 연결
                 }
             }
         });
@@ -311,7 +295,6 @@ public class MainActivity extends AppCompatActivity {
         bluetoothAdapter.startDiscovery();
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this); // 다이얼로그 생성
-//        builder.setTitle("기기 검색");
         builder.setTitle(getString(R.string.search_device));
 
         adapter = new ArrayAdapter<>(this,
@@ -324,7 +307,7 @@ public class MainActivity extends AppCompatActivity {
                 String name = adapter.getItem(which);
                 unpairedList.remove(name);
                 paired = false;
-                connectDevice(name, paired);
+                connectDevice(name, false);
             }
         });
         AlertDialog dialog = builder.create(); // 빌더로 다이얼로그 만들기
@@ -359,8 +342,8 @@ public class MainActivity extends AppCompatActivity {
 
     // 기기 연결
     private void connectDevice(String selectedDeviceName, boolean paired) {
-        final Handler mHandler = new Handler() {
-            @SuppressLint("HandlerLeak")
+        final Handler mHandler = new Handler(Looper.getMainLooper()) {
+            @Override
             public void handleMessage(Message msg) {
                 if(msg.what==1) {
                     try{
@@ -411,10 +394,11 @@ public class MainActivity extends AppCompatActivity {
         return bitmap;
     }
     private void setCurrentState() {
-        currentState.setVisibility(View.VISIBLE);
-        currentState.setText("R: " + (colors[0] & 0xFF) + " G: " + (colors[1] & 0xFF) +
-                             " B: " + (colors[2] & 0xFF) + "\n" + getString(R.string.brightness) +
-                            ": "+ (colors[3] & 0xFF));
+        binding.currentState.setVisibility(View.VISIBLE);
+        String curStateText = "R: " + (colors[0] & 0xFF) + " G: " + (colors[1] & 0xFF) +
+                " B: " + (colors[2] & 0xFF) + "\n" + getString(R.string.brightness) +
+                ": "+ (colors[3] & 0xFF);
+        binding.currentState.setText(curStateText);
     }
     // 색상 및 밝기 데이터 블루투스로 보내기
     private void sendData() {
@@ -422,7 +406,7 @@ public class MainActivity extends AppCompatActivity {
             outputStream.write(colors); // 출력 스트림으로 데이터 배열 전송
         } catch(Exception e) {
             e.printStackTrace();
-            Toast.makeText(getApplicationContext(), getString(R.string.cannot_send_data), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.cannot_send_data), Toast.LENGTH_SHORT).show();
         }
         setCurrentState();
     }
@@ -431,15 +415,15 @@ public class MainActivity extends AppCompatActivity {
         colors[0] = (byte) Color.red(cOrp);
         colors[1] = (byte) Color.green(cOrp);
         colors[2] = (byte) Color.blue(cOrp);
-        colors[3] = (byte) bar.getProgress();
-        selectedColor.setImageDrawable(null);
-        selectedColor.setBackgroundColor(Color.rgb(Color.red(cOrp), Color.green(cOrp), 
+        colors[3] = (byte) binding.bar.getProgress();
+        binding.selectedColor.setImageDrawable(null);
+        binding.selectedColor.setBackgroundColor(Color.rgb(Color.red(cOrp), Color.green(cOrp),
                                                     Color.blue(cOrp)));
         try {
             outputStream.write(colors);
         } catch(Exception e) {
             e.printStackTrace();
-            Toast.makeText(getApplicationContext(), getString(R.string.cannot_send_data), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.cannot_send_data), Toast.LENGTH_SHORT).show();
         }
         setCurrentState();
     }
@@ -447,19 +431,19 @@ public class MainActivity extends AppCompatActivity {
     private void rainbow() {
         colors[4] = 1;
         sendData();
-        currentState.setText("rainbow");
+        binding.currentState.setText("rainbow");
         powerOn=true;
         colors[4] = 0;
     }
     // 전원 함수
     private void power() {
         if(powerOn) {
-            bar.setProgress(0);
+            binding.bar.setProgress(0);
             sendData();
             powerOn=false;
         }
         else { // 전원이 꺼져있다면
-            bar.setProgress(255);
+            binding.bar.setProgress(255);
             sendData();
             powerOn=true;
         }
@@ -486,23 +470,25 @@ public class MainActivity extends AppCompatActivity {
     private void checkPermissions(String[] permissions) {
         ArrayList<String> requestList = new ArrayList<>();
 
-        for(int i=0; i<permissions.length; i++) {
-            String curPermission = permissions[i];
+        for (String curPermission : permissions) {
             int permissionCheck = ContextCompat.checkSelfPermission(this, curPermission);
-            if(permissionCheck == PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(getApplicationContext(), curPermission+ " "+getString(R.string.has_permission), Toast.LENGTH_SHORT).show();
+            if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(getApplicationContext(), curPermission + " " + getString(R.string.has_permission), Toast.LENGTH_SHORT).show();
             } else {
-                if(ActivityCompat.shouldShowRequestPermissionRationale(this,curPermission)) {
-                    Toast.makeText(getApplicationContext(), curPermission+" " + getString(R.string.need_explain_permission), Toast.LENGTH_SHORT).show();
+                if (ActivityCompat.shouldShowRequestPermissionRationale(this, curPermission)) {
+                    Toast.makeText(getApplicationContext(), curPermission + " " + getString(R.string.need_explain_permission), Toast.LENGTH_SHORT).show();
                 } else {
                     requestList.add(curPermission);
                 }
-
             }
         }
+        // 권한이 하나라도 없는 경우
         if(requestList.size()>0) {
             String[] requests = requestList.toArray(new String[requestList.size()]);
             ActivityCompat.requestPermissions(this, requests, REQUEST_PERMISSIONS);
+        }
+        else {
+            checkBluetooth();
         }
     }
 
